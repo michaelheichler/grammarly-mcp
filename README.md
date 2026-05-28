@@ -653,7 +653,7 @@ Runs one Grammarly feature against supplied text using the local Grammarly Docs 
 
 Supported `feature` values:
 
-`proofreader`, `grammar-checker`, `spell-checker`, `punctuation-checker`, `tone-detector`, `word-counter`, `sentence-checker`, `passive-voice-checker`, `ai-chat`, `paraphraser`, `reader-reactions`, `humanizer`, `citation`, `ai-detector`, `ai-rewriter`, `plagiarism-checker`, `ai-grader`, `authorship`.
+`proofreader`, `grammar-checker`, `spell-checker`, `punctuation-checker`, `tone-detector`, `word-counter`, `character-counter`, `paragraph-counter`, `sentence-counter`, `sentence-checker`, `passive-voice-checker`, `essay-checker`, `ai-writing-tools`, `ai-chat`, `paraphraser`, `paraphrasing-tool`, `reader-reactions`, `humanizer`, `ai-humanizer`, `citation`, `citation-generator`, `citation-finder`, `ai-detector`, `ai-rewriter`, `plagiarism-checker`, `ai-grader`, `authorship`, `resume-builder`, `style-guide`, `snippets`, `analytics`, `brand-tones`.
 
 Input:
 

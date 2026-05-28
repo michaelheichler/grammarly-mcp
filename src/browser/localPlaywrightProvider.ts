@@ -24,18 +24,32 @@ export const LOCAL_GRAMMARLY_FEATURES = [
   "punctuation-checker",
   "tone-detector",
   "word-counter",
+  "character-counter",
+  "paragraph-counter",
+  "sentence-counter",
   "sentence-checker",
   "passive-voice-checker",
+  "essay-checker",
+  "ai-writing-tools",
   "ai-chat",
   "paraphraser",
+  "paraphrasing-tool",
   "reader-reactions",
   "humanizer",
+  "ai-humanizer",
   "citation",
+  "citation-generator",
+  "citation-finder",
   "ai-detector",
   "ai-rewriter",
   "plagiarism-checker",
   "ai-grader",
   "authorship",
+  "resume-builder",
+  "style-guide",
+  "snippets",
+  "analytics",
+  "brand-tones",
 ] as const;
 
 export type LocalGrammarlyFeatureId = (typeof LOCAL_GRAMMARLY_FEATURES)[number];
@@ -465,16 +479,21 @@ export class LocalPlaywrightProvider implements BrowserProvider {
       case "ai-chat":
         return clickFirstVisible(agentButtonLocators(page, "AI Chat"));
       case "paraphraser":
+      case "paraphrasing-tool":
         return clickFirstVisible(agentButtonLocators(page, "Paraphraser"));
       case "reader-reactions":
         return clickFirstVisible(agentButtonLocators(page, "Reader Reactions"));
       case "humanizer":
+      case "ai-humanizer":
         return clickFirstVisible(agentButtonLocators(page, "Humanizer"));
       case "citation":
+      case "citation-generator":
+      case "citation-finder":
         return clickFirstVisible(agentButtonLocators(page, "Citation"));
       case "ai-rewriter":
         return clickFirstVisible(agentButtonLocators(page, "AI Rewriter"));
       case "ai-grader":
+      case "essay-checker":
         return clickFirstVisible(agentButtonLocators(page, "AI Grader"));
       case "authorship":
         return clickFirstVisible(agentButtonLocators(page, "Authorship"));
@@ -486,7 +505,17 @@ export class LocalPlaywrightProvider implements BrowserProvider {
       case "sentence-checker":
       case "passive-voice-checker":
       case "word-counter":
+      case "character-counter":
+      case "paragraph-counter":
+      case "sentence-counter":
+      case "ai-writing-tools":
         return true;
+      case "resume-builder":
+      case "style-guide":
+      case "snippets":
+      case "analytics":
+      case "brand-tones":
+        return false;
       default: {
         const exhaustiveCheck: never = feature;
         throw new Error(`Unsupported Grammarly feature: ${exhaustiveCheck}`);
@@ -593,6 +622,24 @@ const featureMetadata: Record<
     notes:
       "Computed locally and cross-checked against the Grammarly word-count footer when visible.",
   },
+  "character-counter": {
+    id: "character-counter",
+    label: "Character Counter",
+    kind: "metric",
+    notes: "Computed locally from the editor text.",
+  },
+  "paragraph-counter": {
+    id: "paragraph-counter",
+    label: "Paragraph Counter",
+    kind: "metric",
+    notes: "Computed locally from the editor text.",
+  },
+  "sentence-counter": {
+    id: "sentence-counter",
+    label: "Sentence Counter",
+    kind: "metric",
+    notes: "Computed locally from the editor text.",
+  },
   "sentence-checker": {
     id: "sentence-checker",
     label: "Sentence Checker",
@@ -606,6 +653,19 @@ const featureMetadata: Record<
     notes:
       "Covered when Grammarly exposes passive-voice guidance in the proofreader panel.",
   },
+  "essay-checker": {
+    id: "essay-checker",
+    label: "Essay Checker",
+    kind: "agent",
+    notes: "Mapped to Grammarly's AI Grader agent when exposed in Docs.",
+  },
+  "ai-writing-tools": {
+    id: "ai-writing-tools",
+    label: "AI Writing Tools",
+    kind: "proofreader-capability",
+    notes:
+      "Umbrella public feature covered by Docs agents and proofreader capabilities.",
+  },
   "ai-chat": {
     id: "ai-chat",
     label: "AI Chat",
@@ -617,6 +677,12 @@ const featureMetadata: Record<
     label: "Paraphraser",
     kind: "agent",
     notes: "Grammarly agent for rewriting while preserving meaning.",
+  },
+  "paraphrasing-tool": {
+    id: "paraphrasing-tool",
+    label: "Paraphrasing Tool",
+    kind: "agent",
+    notes: "Mapped to Grammarly's Paraphraser agent in Docs.",
   },
   "reader-reactions": {
     id: "reader-reactions",
@@ -630,11 +696,29 @@ const featureMetadata: Record<
     kind: "agent",
     notes: "Grammarly agent for making AI-assisted writing sound more natural.",
   },
+  "ai-humanizer": {
+    id: "ai-humanizer",
+    label: "AI Humanizer",
+    kind: "agent",
+    notes: "Mapped to Grammarly's Humanizer agent in Docs.",
+  },
   citation: {
     id: "citation",
     label: "Citation",
     kind: "agent",
     notes: "Grammarly citation agent in Docs.",
+  },
+  "citation-generator": {
+    id: "citation-generator",
+    label: "Citation Generator",
+    kind: "agent",
+    notes: "Mapped to Grammarly's Citation agent when exposed in Docs.",
+  },
+  "citation-finder": {
+    id: "citation-finder",
+    label: "Citation Finder",
+    kind: "agent",
+    notes: "Mapped to Grammarly's Citation agent when exposed in Docs.",
   },
   "ai-detector": {
     id: "ai-detector",
@@ -667,6 +751,40 @@ const featureMetadata: Record<
     kind: "agent",
     notes: "Grammarly authorship agent when available in the account.",
   },
+  "resume-builder": {
+    id: "resume-builder",
+    label: "Resume Builder",
+    kind: "agent",
+    notes:
+      "Public Grammarly tool; not exposed as a local Docs agent in every account.",
+  },
+  "style-guide": {
+    id: "style-guide",
+    label: "Style Guide",
+    kind: "agent",
+    notes:
+      "Team/enterprise feature; not exposed as a local Docs agent in this UI.",
+  },
+  snippets: {
+    id: "snippets",
+    label: "Snippets",
+    kind: "agent",
+    notes:
+      "Team/enterprise feature; not exposed as a local Docs agent in this UI.",
+  },
+  analytics: {
+    id: "analytics",
+    label: "Analytics",
+    kind: "agent",
+    notes: "Team/admin feature; not exposed as a local Docs agent in this UI.",
+  },
+  "brand-tones": {
+    id: "brand-tones",
+    label: "Brand Tones",
+    kind: "agent",
+    notes:
+      "Team/enterprise feature; not exposed as a local Docs agent in this UI.",
+  },
 };
 
 const proofreaderFeatures = new Set<LocalGrammarlyFeatureId>([
@@ -677,17 +795,39 @@ const proofreaderFeatures = new Set<LocalGrammarlyFeatureId>([
   "tone-detector",
   "sentence-checker",
   "passive-voice-checker",
-  "word-counter",
+  "ai-writing-tools",
 ]);
+
+const metricFeatures = new Set<LocalGrammarlyFeatureId>([
+  "word-counter",
+  "character-counter",
+  "paragraph-counter",
+  "sentence-counter",
+]);
+
+const localAvailabilityLabels: Partial<
+  Record<LocalGrammarlyFeatureId, string>
+> = {
+  "paraphrasing-tool": "Paraphraser",
+  "ai-humanizer": "Humanizer",
+  "citation-generator": "Citation",
+  "citation-finder": "Citation",
+  "essay-checker": "AI Grader",
+};
 
 const interactiveAgentFeatures = new Set<LocalGrammarlyFeatureId>([
   "ai-chat",
   "paraphraser",
+  "paraphrasing-tool",
   "reader-reactions",
   "humanizer",
+  "ai-humanizer",
   "citation",
+  "citation-generator",
+  "citation-finder",
   "ai-rewriter",
   "ai-grader",
+  "essay-checker",
 ]);
 
 async function ensurePage(context: BrowserContext): Promise<Page> {
@@ -700,9 +840,12 @@ function buildFeatureSummaries(
 ): LocalGrammarlyFeatureSummary[] {
   return LOCAL_GRAMMARLY_FEATURES.map((id) => {
     const metadata = featureMetadata[id];
-    const expectedLabel = metadata.label.toLowerCase();
+    const expectedLabel = (
+      localAvailabilityLabels[id] ?? metadata.label
+    ).toLowerCase();
     const localDocsAvailable =
       proofreaderFeatures.has(id) ||
+      metricFeatures.has(id) ||
       Array.from(visibleAgentLabels).some(
         (label) => label.toLowerCase() === expectedLabel,
       );

@@ -1,7 +1,7 @@
 {
   "name": "grammarly-mcp",
   "version": "0.1.0",
-  "description": "MCP server for Grammarly AI detection and plagiarism scoring via Stagehand + Browserbase browser automation.",
+  "description": "MCP server for local and cloud Grammarly Docs automation.",
   "private": true,
   "type": "module",
   "main": "dist/server.js",
@@ -39,6 +39,7 @@
     "ai-sdk-provider-claude-code": "^2.0.0",
     "browser-use-sdk": "^2.0.12",
     "dotenv": "^17.2.3",
+    "playwright": "^1.57.0",
     "zod": "^3.25.7"
   },
   "devDependencies": {

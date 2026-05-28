@@ -16,6 +16,7 @@ export interface SessionInfo {
 export class BrowserbaseSessionManager {
   private readonly bb: Browserbase;
   private readonly projectId: string;
+  private readonly advancedStealth: boolean;
   private cachedSessionId: string | null = null;
   private cachedContextId: string | null = null;
 
@@ -28,6 +29,7 @@ export class BrowserbaseSessionManager {
 
     this.bb = new Browserbase({ apiKey: config.browserbaseApiKey });
     this.projectId = config.browserbaseProjectId;
+    this.advancedStealth = config.browserbaseAdvancedStealth;
 
     // Use provided session/context IDs if available
     this.cachedSessionId = config.browserbaseSessionId ?? null;
@@ -95,12 +97,11 @@ export class BrowserbaseSessionManager {
     const createParams: Parameters<typeof this.bb.sessions.create>[0] = {
       projectId: this.projectId,
       browserSettings: {
-        // Advanced stealth mode to avoid detection
-        advancedStealth: true,
         // Auto-solve CAPTCHAs
         solveCaptchas: true,
         // Block ads for faster loading
         blockAds: true,
+        ...(this.advancedStealth ? { advancedStealth: true } : {}),
       },
     };
 

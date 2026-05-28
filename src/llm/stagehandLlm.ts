@@ -50,10 +50,17 @@ export async function createStagehandLlmClient(
   switch (provider) {
     case "claude-code": {
       // Primary: ai-sdk-provider-claude-code (Pro/Max subscription via CLI)
-      const { claudeCode } = await import("ai-sdk-provider-claude-code");
+      const { createClaudeCode } = await import("ai-sdk-provider-claude-code");
+      const claude = createClaudeCode({
+        defaultSettings: {
+          ...(config.claudeCodeExecutable && {
+            pathToClaudeCodeExecutable: config.claudeCodeExecutable,
+          }),
+        },
+      });
       const modelId =
         config.claudeModel === "auto" ? "sonnet" : config.claudeModel;
-      return new AISdkClient({ model: claudeCode(modelId) });
+      return new AISdkClient({ model: claude(modelId) });
     }
 
     case "openai": {

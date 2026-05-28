@@ -36,10 +36,10 @@ export interface GrammarlyScoreResult extends GrammarlyScores {
 
 /**
  * Abstract interface for browser automation providers.
- * Supports both Stagehand (Browserbase) and Browser Use Cloud.
+ * Supports Stagehand (Browserbase), Browser Use Cloud, and local Playwright.
  */
 export interface BrowserProvider {
-  readonly providerName: "stagehand" | "browser-use";
+  readonly providerName: "stagehand" | "browser-use" | "local-playwright";
 
   /**
    * Create a new browser session for Grammarly automation.
@@ -75,6 +75,12 @@ export async function createBrowserProvider(
     case "browser-use": {
       const { BrowserUseProvider } = await import("./browserUseProvider");
       return new BrowserUseProvider(config);
+    }
+    case "local-playwright": {
+      const { LocalPlaywrightProvider } = await import(
+        "./localPlaywrightProvider"
+      );
+      return new LocalPlaywrightProvider(config);
     }
     default: {
       // Exhaustive check - TypeScript will error if a case is missing

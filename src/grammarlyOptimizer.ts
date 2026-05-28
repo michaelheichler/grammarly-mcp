@@ -261,10 +261,13 @@ export async function runGrammarlyOptimization(
 
   // Progress: Creating browser session
   const providerName = appConfig.browserProvider;
-  await onProgress?.(
-    `Creating ${providerName === "stagehand" ? "Stagehand" : "Browser Use"} session...`,
-    5,
-  );
+  const providerLabel =
+    providerName === "stagehand"
+      ? "Stagehand"
+      : providerName === "browser-use"
+        ? "Browser Use"
+        : "local Playwright";
+  await onProgress?.(`Creating ${providerLabel} session...`, 5);
 
   // Create provider based on configuration
   let provider: BrowserProvider | undefined;
@@ -302,8 +305,7 @@ export async function runGrammarlyOptimization(
       provider: activeProvider.providerName,
     });
 
-    // Capture sessionId as a const for use in closures (TypeScript narrowing)
-    const activeSessionId = sessionId;
+    let activeSessionId = sessionId;
 
     // Progress: Initial scoring
     await onProgress?.("Running initial Grammarly scoring...", 10);
@@ -338,8 +340,8 @@ export async function runGrammarlyOptimization(
       );
 
       const notes = reachedThresholds
-        ? "Score-only run: original text already meets configured AI and plagiarism thresholds."
-        : "Score-only run: thresholds not met or scores unavailable; no rewriting performed.";
+        ? `Score-only run: original text already meets configured AI and plagiarism thresholds. ${lastScores.notes}`
+        : `Score-only run: thresholds not met or scores unavailable; no rewriting performed. ${lastScores.notes}`;
 
       return {
         final_text: currentText,
@@ -349,7 +351,7 @@ export async function runGrammarlyOptimization(
         thresholds_met: reachedThresholds,
         history,
         notes,
-        live_url: liveUrl,
+        live_url: lastScores.liveUrl ?? liveUrl,
         provider: activeProvider.providerName,
       };
     }
@@ -434,6 +436,27 @@ export async function runGrammarlyOptimization(
         scoringProgress,
       );
 
+      if (activeProvider.providerName === "local-playwright") {
+        await activeProvider.closeSession(activeSessionId);
+        sessionId = null;
+
+        const refreshedSession = await withRetry(
+          () =>
+            activeProvider.createSession({
+              proxyCountryCode: proxy_country_code,
+            }),
+          {
+            maxRetries: 2,
+            backoffMs: 1000,
+            label: `refresh-local-session-${iteration}`,
+          },
+        );
+
+        activeSessionId = refreshedSession.sessionId;
+        sessionId = refreshedSession.sessionId;
+        liveUrl = refreshedSession.liveUrl;
+      }
+
       // Re-score the new candidate with retry logic
       lastScores = await withRetry(
         () =>
@@ -460,7 +483,9 @@ export async function runGrammarlyOptimization(
         iteration,
         ai_detection_percent: lastScores.aiDetectionPercent,
         plagiarism_percent: lastScores.plagiarismPercent,
-        note: rewriteResult.reasoning,
+        note: lastScores.notes
+          ? `${rewriteResult.reasoning} Scoring notes: ${lastScores.notes}`
+          : rewriteResult.reasoning,
       });
 
       log("info", "Optimization iteration completed", {

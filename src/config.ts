@@ -47,23 +47,34 @@ const effectiveEnv =
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type LLMProvider = "claude-code" | "openai" | "google" | "anthropic";
 export type ClaudeModel = "auto" | "haiku" | "sonnet" | "opus";
+export type BrowserProviderName =
+  | "stagehand"
+  | "browser-use"
+  | "local-playwright";
 
 export interface AppConfig {
   // Environment isolation
   ignoreSystemEnv: boolean;
 
   // Browser provider selection
-  browserProvider: "stagehand" | "browser-use";
+  browserProvider: BrowserProviderName;
 
   // Browser Use Cloud (fallback provider)
   browserUseApiKey: string | undefined;
   browserUseProfileId: string | undefined;
+
+  // Local Playwright browser provider
+  localBrowserProfileDir: string;
+  localBrowserHeadless: boolean;
+  localBrowserChannel: string | undefined;
+  localBrowserExecutable: string | undefined;
 
   // Browserbase + Stagehand (primary provider)
   browserbaseApiKey: string | undefined;
   browserbaseProjectId: string | undefined;
   browserbaseSessionId: string | undefined;
   browserbaseContextId: string | undefined;
+  browserbaseAdvancedStealth: boolean;
   stagehandModel: string | undefined;
   stagehandCacheDir: string | undefined;
 
@@ -72,6 +83,7 @@ export interface AppConfig {
   rewriteLlmProvider: LLMProvider | undefined;
 
   // Claude model selection (when using claude-code provider)
+  claudeCodeExecutable: string | undefined;
   claudeModel: ClaudeModel;
 
   // Non-Claude model selection
@@ -108,18 +120,39 @@ const EnvSchema = z.object({
     )
     .default(false),
 
-  // Provider selection: "stagehand" (default) or "browser-use" (fallback)
-  BROWSER_PROVIDER: z.enum(["stagehand", "browser-use"]).default("stagehand"),
+  // Provider selection: "stagehand" (default), "browser-use", or "local-playwright"
+  BROWSER_PROVIDER: z
+    .enum(["stagehand", "browser-use", "local-playwright"])
+    .default("stagehand"),
 
   // Browser Use Cloud (required when BROWSER_PROVIDER=browser-use)
   BROWSER_USE_API_KEY: z.string().optional(),
   BROWSER_USE_PROFILE_ID: z.string().optional(),
+
+  // Local Playwright provider (no cloud/browser API keys)
+  LOCAL_BROWSER_PROFILE_DIR: z
+    .string()
+    .default("~/.grammarly-mcp/chrome-profile"),
+  LOCAL_BROWSER_HEADLESS: z
+    .preprocess(
+      (val) => val === "true" || val === true,
+      z.boolean().default(false),
+    )
+    .default(false),
+  LOCAL_BROWSER_CHANNEL: z.string().optional(),
+  LOCAL_BROWSER_EXECUTABLE: z.string().optional(),
 
   // Browserbase + Stagehand (required when BROWSER_PROVIDER=stagehand)
   BROWSERBASE_API_KEY: z.string().optional(),
   BROWSERBASE_PROJECT_ID: z.string().optional(),
   BROWSERBASE_SESSION_ID: z.string().optional(),
   BROWSERBASE_CONTEXT_ID: z.string().optional(),
+  BROWSERBASE_ADVANCED_STEALTH: z
+    .preprocess(
+      (val) => val === "true" || val === true,
+      z.boolean().default(false),
+    )
+    .default(false),
   STAGEHAND_MODEL: z.string().default("gemini-2.5-flash"),
   STAGEHAND_CACHE_DIR: z.string().optional(),
 
@@ -132,6 +165,7 @@ const EnvSchema = z.object({
     .optional(),
 
   // Claude model selection (when using claude-code provider)
+  CLAUDE_CODE_EXECUTABLE: z.string().optional(),
   CLAUDE_MODEL: z.enum(["auto", "haiku", "sonnet", "opus"]).default("auto"),
 
   // Non-Claude model selection
@@ -235,11 +269,28 @@ export const config: AppConfig = {
   browserUseApiKey: env.BROWSER_USE_API_KEY,
   browserUseProfileId: env.BROWSER_USE_PROFILE_ID,
 
+  // Local Playwright browser provider
+  localBrowserProfileDir:
+    env.LOCAL_BROWSER_PROFILE_DIR === "~/.grammarly-mcp/chrome-profile"
+      ? path.join(
+          process.env.HOME ?? process.cwd(),
+          ".grammarly-mcp",
+          "chrome-profile",
+        )
+      : env.LOCAL_BROWSER_PROFILE_DIR.replace(
+          /^~(?=$|\/)/,
+          process.env.HOME ?? "",
+        ),
+  localBrowserHeadless: env.LOCAL_BROWSER_HEADLESS,
+  localBrowserChannel: env.LOCAL_BROWSER_CHANNEL,
+  localBrowserExecutable: env.LOCAL_BROWSER_EXECUTABLE,
+
   // Browserbase + Stagehand (primary)
   browserbaseApiKey: env.BROWSERBASE_API_KEY,
   browserbaseProjectId: env.BROWSERBASE_PROJECT_ID,
   browserbaseSessionId: env.BROWSERBASE_SESSION_ID,
   browserbaseContextId: env.BROWSERBASE_CONTEXT_ID,
+  browserbaseAdvancedStealth: env.BROWSERBASE_ADVANCED_STEALTH,
   stagehandModel: env.STAGEHAND_MODEL,
   stagehandCacheDir: env.STAGEHAND_CACHE_DIR,
 
@@ -248,6 +299,7 @@ export const config: AppConfig = {
   rewriteLlmProvider: env.REWRITE_LLM_PROVIDER,
 
   // Claude model selection
+  claudeCodeExecutable: env.CLAUDE_CODE_EXECUTABLE,
   claudeModel: env.CLAUDE_MODEL,
 
   // Non-Claude model selection

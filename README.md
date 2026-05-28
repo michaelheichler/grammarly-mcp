@@ -1,12 +1,12 @@
 # Grammarly MCP Server
 
-Single-tool Model Context Protocol (MCP) server for AI detection and plagiarism scoring via Grammarly's web interface. Supports two browser automation providers: **Stagehand + Browserbase** (default) and **Browser Use Cloud** (fallback).
+Model Context Protocol (MCP) server for Grammarly Docs automation. It can run locally against a persistent Chrome profile, or use cloud browser providers for legacy workflows.
 
 ## What it does
 
-- Automates Grammarly's docs UI to get AI detection and plagiarism percentages
+- Automates Grammarly's Docs UI to inspect Proofreader output, AI detection, plagiarism, and available Grammarly agents
 - Rewrites text via Claude to reduce AI detection scores
-- Exposes one MCP tool: `grammarly_optimize_text`
+- Exposes MCP tools for login, feature inventory, individual Grammarly features, and optimization
 
 > **Note:** This server interacts with app.grammarly.com through browser automation. It does not use Grammarly APIs.
 
@@ -35,7 +35,30 @@ Single-tool Model Context Protocol (MCP) server for AI detection and plagiarism 
 
 ## Quick Start
 
-### Option A: Stagehand + Browserbase (Recommended)
+### Option A: Local Playwright + Chrome (Recommended)
+
+**Prerequisites:** Node.js 18+, Grammarly account, local Chrome, Claude Code CLI for rewrite/analyze modes
+
+```bash
+# 1. Clone and build
+git clone https://github.com/BjornMelin/grammarly-mcp.git
+cd grammarly-mcp
+pnpm install && pnpm build
+
+# 2. Configure local browser mode
+BROWSER_PROVIDER=local-playwright
+LOCAL_BROWSER_CHANNEL=chrome
+LOCAL_BROWSER_HEADLESS=true
+LOCAL_BROWSER_PROFILE_DIR=~/.grammarly-mcp/chrome-profile
+
+# 3. Add to Claude Code
+claude mcp add grammarly -- node $(pwd)/dist/server.js
+
+# 4. First login only: run grammarly_open_login_browser and log into Grammarly
+# Normal calls then run in the background through the persistent profile.
+```
+
+### Option B: Stagehand + Browserbase
 
 **Prerequisites:** Node.js 18+, Grammarly Pro account, [Browserbase](https://www.browserbase.com) account
 
@@ -65,7 +88,7 @@ claude mcp add grammarly -- node $(pwd)/dist/server.js
 claude "Use grammarly_optimize_text with mode score_only on: Hello world test"
 ```
 
-### Option B: Browser Use Cloud (Legacy)
+### Option C: Browser Use Cloud (Legacy)
 
 **Prerequisites:** Node.js 18+, Grammarly Pro account, [Browser Use Cloud](https://cloud.browser-use.com) account
 
@@ -96,7 +119,9 @@ claude mcp add grammarly -- node $(pwd)/dist/server.js
 
 ## Features
 
-- **Dual provider support**: Stagehand + Browserbase (default) or Browser Use Cloud (fallback)
+- **Three provider modes**: local Playwright + Chrome, Stagehand + Browserbase, or Browser Use Cloud
+- **Premium Grammarly feature surface**: feature inventory plus `grammarly_run_feature` for Proofreader, Grammar Checker, Spell Checker, Punctuation Checker, Tone Detector, Word Counter, Sentence Checker, Passive Voice Checker, AI Chat, Paraphraser, Reader Reactions, Humanizer, Citation, AI Detector, AI Rewriter, Plagiarism Checker, AI Grader, and Authorship
+- **Background local automation**: local scoring can run headless after one visible login setup
 - **Session persistence**: Browserbase contexts preserve Grammarly login across sessions
 - **Self-healing automation**: Stagehand adapts to DOM changes automatically
 - **Multi-LLM support**: Separate providers for browser automation (`STAGEHAND_LLM_PROVIDER`) and text rewriting (`REWRITE_LLM_PROVIDER`)
@@ -146,17 +171,22 @@ pnpm build
 
 ## Provider Selection
 
-This server supports two browser automation providers:
+This server supports three browser automation providers:
 
-| Feature | Stagehand (Default) | Browser Use Cloud |
-| --- | --- | --- |
-| Provider | Browserbase | Browser Use Cloud |
-| Automation | observe/act/extract | Natural language tasks |
-| Self-healing | Yes | Limited |
-| Session persistence | Context IDs | Profile sync |
-| Debug URL | Real-time | Per-task |
-| Action caching | Yes | No |
-| Reliability | Higher | Moderate |
+| Feature | Local Playwright | Stagehand | Browser Use Cloud |
+| --- | --- | --- | --- |
+| Provider | Local Chrome | Browserbase | Browser Use Cloud |
+| Automation | Deterministic selectors | observe/act/extract | Natural language tasks |
+| Session persistence | Local Chrome profile | Context IDs | Profile sync |
+| Browser window | Headless by default after login | Cloud | Cloud |
+| API keys for browser | No | Yes | Yes |
+| Best for | On-device workflows | Cloud workflows | Legacy Browser Use setups |
+
+### When to Use Local Playwright
+
+- You want on-device browser automation with no browser-service API keys
+- You prefer a local persistent Grammarly login profile
+- You want normal calls to run in the background without a visible browser window
 
 ### When to Use Stagehand
 
@@ -174,8 +204,9 @@ This server supports two browser automation providers:
 Set the provider via environment variable:
 
 ```bash
-BROWSER_PROVIDER=stagehand  # Default
-BROWSER_PROVIDER=browser-use  # Fallback
+BROWSER_PROVIDER=local-playwright  # Local Chrome
+BROWSER_PROVIDER=stagehand         # Browserbase
+BROWSER_PROVIDER=browser-use       # Browser Use Cloud
 ```
 
 ---
@@ -192,7 +223,18 @@ BROWSER_PROVIDER=browser-use  # Fallback
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `BROWSER_PROVIDER` | No | `stagehand` | `stagehand` or `browser-use` |
+| `BROWSER_PROVIDER` | No | `stagehand` | `local-playwright`, `stagehand`, or `browser-use` |
+
+### Local Playwright + Chrome
+
+Required/recommended when `BROWSER_PROVIDER=local-playwright`:
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `LOCAL_BROWSER_PROFILE_DIR` | No | `~/.grammarly-mcp/chrome-profile` | Persistent Chrome profile for Grammarly login state |
+| `LOCAL_BROWSER_HEADLESS` | No | `false` | Run normal calls in background when `true`; login helper always opens visibly |
+| `LOCAL_BROWSER_CHANNEL` | No | — | Browser channel, usually `chrome` |
+| `LOCAL_BROWSER_EXECUTABLE` | No | — | Explicit browser executable path if not using a channel |
 
 ### Stagehand + Browserbase
 
@@ -589,7 +631,46 @@ Gemini for browser automation (fast), Claude for rewriting (quality):
 
 ---
 
-## Tool: grammarly_optimize_text
+## Tools
+
+### `grammarly_open_login_browser`
+
+Opens the persistent local Chrome profile visibly so you can log into Grammarly. Normal local calls can run headless after this setup.
+
+Input:
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `wait_seconds` | number | `180` | How long to keep the login browser open |
+
+### `grammarly_list_features`
+
+Inspects the local Grammarly Docs UI and returns the feature surface this account exposes. The server reports unsupported or hidden features instead of pretending they are available.
+
+### `grammarly_run_feature`
+
+Runs one Grammarly feature against supplied text using the local Grammarly Docs UI.
+
+Supported `feature` values:
+
+`proofreader`, `grammar-checker`, `spell-checker`, `punctuation-checker`, `tone-detector`, `word-counter`, `sentence-checker`, `passive-voice-checker`, `ai-chat`, `paraphraser`, `reader-reactions`, `humanizer`, `citation`, `ai-detector`, `ai-rewriter`, `plagiarism-checker`, `ai-grader`, `authorship`.
+
+Input:
+
+| Parameter | Type | Default | Description |
+| --- | --- | --- | --- |
+| `feature` | enum | _(required)_ | Grammarly feature or agent to open |
+| `text` | string | _(required)_ | Text to place in Grammarly Docs |
+| `instruction` | string | — | Optional prompt for interactive agents |
+
+Output includes:
+
+- `panelText`: visible Grammarly panel/editor text
+- `documentText`: text currently visible in the editor
+- `scores`: writing quality, AI detection, and plagiarism percentages when visible
+- `metrics`: words, characters, sentences, paragraphs, and Grammarly word count when visible
+
+### `grammarly_optimize_text`
 
 ### Input Parameters
 

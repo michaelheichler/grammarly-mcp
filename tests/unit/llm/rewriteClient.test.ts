@@ -18,7 +18,9 @@ vi.mock("ai", () => ({
 
 // Mock the claude-code provider
 vi.mock("ai-sdk-provider-claude-code", () => ({
-	claudeCode: vi.fn().mockReturnValue({ modelId: "claude-code-mock" }),
+	createClaudeCode: vi
+		.fn()
+		.mockReturnValue(vi.fn().mockReturnValue({ modelId: "claude-code-mock" })),
 }));
 
 // Mock the openai provider

@@ -97,13 +97,20 @@ async function getRewriteModel(
 ) {
   switch (provider) {
     case "claude-code": {
-      const { claudeCode } = await import("ai-sdk-provider-claude-code");
+      const { createClaudeCode } = await import("ai-sdk-provider-claude-code");
+      const claude = createClaudeCode({
+        defaultSettings: {
+          ...(config.claudeCodeExecutable && {
+            pathToClaudeCodeExecutable: config.claudeCodeExecutable,
+          }),
+        },
+      });
       const modelId = chooseClaudeModel(
         textLength,
         maxIterations,
         config.claudeModel,
       );
-      return { model: claudeCode(modelId), modelId: `claude-code/${modelId}` };
+      return { model: claude(modelId), modelId: `claude-code/${modelId}` };
     }
     case "openai": {
       const { openai } = await import("@ai-sdk/openai");
@@ -178,6 +185,18 @@ export async function rewriteText(
       : `Use ${article} ${tone} tone that feels like a human wrote it.`;
 
   const domainText = domainHint ? `Domain: ${domainHint.trim()}.\n` : "";
+  const originalWordCount = countWords(originalText);
+  const scoringLengthText =
+    originalWordCount >= 100
+      ? [
+          `Length requirement: the original text has ${originalWordCount} words.`,
+          "Keep rewrittenText at 100 words or more so Grammarly's AI Detector can score the rewrite.",
+          "Do not shorten below that threshold, even when removing filler.",
+        ].join(" ")
+      : [
+          `Length note: the original text has ${originalWordCount} words.`,
+          "Do not add padding just to reach an AI-detector threshold; preserve the author's scope.",
+        ].join(" ");
 
   const lastAiText =
     lastAiPercent === null
@@ -212,6 +231,7 @@ export async function rewriteText(
     domainText,
     lastAiText,
     lastPlagiarismText,
+    scoringLengthText,
     `${targetText}.`,
     "",
     toneDescription,
@@ -237,6 +257,7 @@ export async function rewriteText(
     "  unless they are essential to the content.",
     "- Make the text sound like a specific human author wrote it for a specific audience,",
     "  not like a generic AI assistant voice.",
+    "- If the original text has at least 100 words, the rewritten text must also have at least 100 words.",
     "",
     "Return strictly in the JSON schema you were given.",
     "",
@@ -274,6 +295,13 @@ export async function rewriteText(
     ]);
 
     const object = result.object;
+    const rewrittenWordCount = countWords(object.rewrittenText);
+    if (originalWordCount >= 100 && rewrittenWordCount < 100) {
+      log("warn", "Rewrite is below Grammarly AI Detector scoring length", {
+        originalWordCount,
+        rewrittenWordCount,
+      });
+    }
 
     log("debug", "Rewrite completed", { provider, modelId });
     return {
@@ -290,6 +318,10 @@ export async function rewriteText(
       clearTimeout(timeoutId);
     }
   }
+}
+
+function countWords(text: string): number {
+  return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
 /** Analyze text for AI detection and plagiarism risk. */

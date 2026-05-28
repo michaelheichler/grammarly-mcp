@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { z } from "zod";
+import {
+  LOCAL_GRAMMARLY_FEATURES,
+  listLocalGrammarlyFeatures,
+  openLocalGrammarlyLogin,
+  runLocalGrammarlyFeature,
+} from "./browser/localPlaywrightProvider";
 import { config, log } from "./config";
 import {
   type GrammarlyOptimizeInput,
@@ -10,6 +17,43 @@ import {
   ToolInputSchema,
   ToolOutputSchema,
 } from "./grammarlyOptimizer";
+
+const GrammarlyFeatureSchema = z.enum(LOCAL_GRAMMARLY_FEATURES);
+
+const TextMetricsSchema = z.object({
+  words: z.number().int().nonnegative(),
+  characters: z.number().int().nonnegative(),
+  charactersNoSpaces: z.number().int().nonnegative(),
+  sentences: z.number().int().nonnegative(),
+  paragraphs: z.number().int().nonnegative(),
+  grammarlyWordCount: z.number().int().nonnegative().nullable(),
+});
+
+const GrammarlyFeatureScoresSchema = z.object({
+  writingQuality: z.number().nullable(),
+  aiDetectionPercent: z.number().nullable(),
+  plagiarismPercent: z.number().nullable(),
+});
+
+const GrammarlyFeatureResultSchema = z.object({
+  feature: GrammarlyFeatureSchema,
+  available: z.boolean(),
+  loggedIn: z.boolean(),
+  finalUrl: z.string(),
+  panelText: z.string(),
+  documentText: z.string(),
+  scores: GrammarlyFeatureScoresSchema,
+  metrics: TextMetricsSchema,
+  notes: z.string(),
+});
+
+const GrammarlyFeatureSummarySchema = z.object({
+  id: GrammarlyFeatureSchema,
+  label: z.string(),
+  kind: z.enum(["agent", "proofreader-capability", "metric"]),
+  localDocsAvailable: z.boolean(),
+  notes: z.string(),
+});
 
 /**
  * Format optimization result as human-readable markdown.
@@ -98,6 +142,176 @@ async function main(): Promise<void> {
       capabilities: {
         logging: {},
       },
+    },
+  );
+
+  server.registerTool(
+    "grammarly_open_login_browser",
+    {
+      title: "Open Local Grammarly Login Browser",
+      description:
+        "Open a local Playwright-controlled browser using the persistent Grammarly MCP profile. " +
+        "Use this once to log into Grammarly locally before calling grammarly_optimize_text with BROWSER_PROVIDER=local-playwright.",
+      inputSchema: {
+        wait_seconds: z
+          .number()
+          .int()
+          .min(10)
+          .max(600)
+          .default(180)
+          .describe(
+            "How long to keep the login browser open before returning. Log into Grammarly during this window.",
+          ),
+      },
+      outputSchema: {
+        profile_dir: z.string(),
+        final_url: z.string(),
+        logged_in: z.boolean(),
+        notes: z.string(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (args) => {
+      const input = z
+        .object({
+          wait_seconds: z.number().int().min(10).max(600).default(180),
+        })
+        .parse(args);
+
+      const result = await openLocalGrammarlyLogin(config, input.wait_seconds);
+      const structuredContent = {
+        profile_dir: result.profileDir,
+        final_url: result.finalUrl,
+        logged_in: result.loggedIn,
+        notes: result.loggedIn
+          ? "The local Grammarly profile appears logged in."
+          : "The local Grammarly profile does not appear logged in yet. Run this tool again and complete login in the opened browser.",
+      };
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(structuredContent, null, 2),
+          },
+        ],
+        structuredContent,
+      };
+    },
+  );
+
+  server.registerTool(
+    "grammarly_list_features",
+    {
+      title: "List Grammarly Features",
+      description:
+        "Inspect the local Grammarly Docs UI and list the Grammarly agents and checker capabilities this MCP server can drive.",
+      inputSchema: {},
+      outputSchema: {
+        loggedIn: z.boolean(),
+        finalUrl: z.string(),
+        features: z.array(GrammarlyFeatureSummarySchema),
+        notes: z.string(),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async () => {
+      const result = await listLocalGrammarlyFeatures(config);
+      const structuredContent = {
+        loggedIn: result.loggedIn,
+        finalUrl: result.finalUrl,
+        features: result.features,
+        notes: result.notes,
+      };
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(structuredContent, null, 2),
+          },
+        ],
+        structuredContent,
+      };
+    },
+  );
+
+  server.registerTool(
+    "grammarly_run_feature",
+    {
+      title: "Run Grammarly Feature",
+      description:
+        "Run one Grammarly Docs feature against text through the local browser profile. Supports Proofreader capabilities plus AI Chat, Paraphraser, Reader Reactions, Humanizer, Citation, AI Detector, AI Rewriter, Plagiarism Checker, AI Grader, and Authorship when exposed by the logged-in account.",
+      inputSchema: {
+        feature: GrammarlyFeatureSchema.describe(
+          "The Grammarly feature or agent to open.",
+        ),
+        text: z.string().min(1).describe("Text to place into Grammarly Docs."),
+        instruction: z
+          .string()
+          .optional()
+          .describe(
+            "Optional prompt for interactive Grammarly agents such as AI Chat, Paraphraser, Humanizer, Citation, AI Rewriter, or AI Grader.",
+          ),
+      },
+      outputSchema: GrammarlyFeatureResultSchema.shape,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (args) => {
+      const input = z
+        .object({
+          feature: GrammarlyFeatureSchema,
+          text: z.string().min(1),
+          instruction: z.string().optional(),
+        })
+        .parse(args);
+
+      log("info", "Received grammarly_run_feature tool call", {
+        feature: input.feature,
+      });
+
+      const result = await runLocalGrammarlyFeature(
+        config,
+        input.feature,
+        input.text,
+        input.instruction,
+      );
+      const structuredContent = GrammarlyFeatureResultSchema.parse({
+        feature: result.feature,
+        available: result.available,
+        loggedIn: result.loggedIn,
+        finalUrl: result.finalUrl,
+        panelText: result.panelText,
+        documentText: result.documentText,
+        scores: result.scores,
+        metrics: result.metrics,
+        notes: result.notes,
+      });
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(structuredContent, null, 2),
+          },
+        ],
+        structuredContent,
+      };
     },
   );
 
@@ -198,7 +412,7 @@ async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
 
-  log("info", "Starting Grammarly Browser Use MCP server over stdio");
+  log("info", "Starting Grammarly MCP server over stdio");
 
   const timeoutMs = config.connectTimeoutMs;
   const connectPromise = server.connect(transport);
